@@ -1,0 +1,15 @@
+---
+# Образец. Рабочий файл создаётся командой:
+#
+#   ansible-vault create group_vars/all/vault.yml
+#
+# Пароль от vault лежит в ~/.config/hexlet-devops-76/vault_pass,
+# путь к нему прописан в ansible.cfg.
+
+# Пароль пользователя app в кластере Managed PostgreSQL.
+vault_redmine_db_password: ""
+
+# Ключ подписи сессий Redmine. Должен быть одинаковым на обеих машинах,
+# иначе сессия, выданная одним сервером, не принимается вторым.
+# Сгенерировать: openssl rand -hex 64
+vault_redmine_secret_key_base: ""

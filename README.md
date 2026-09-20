@@ -4,16 +4,24 @@
 
 Автоматизация раскатывания контейнеризированного приложения на кластер машин в облаке.
 
+**Приложение: https://shawn4easy.ru**
+
 Учебный проект Хекслета: https://ru.hexlet.io/programs/devops-for-developers
 Как это должно работать: https://asciinema.org/a/v4evn7XjCdou7Yh71IG0ljb0W
 
+## Что развёрнуто
+
+Redmine в Docker на двух виртуальных машинах за L7-балансировщиком. Обе машины
+работают с общим кластером Managed PostgreSQL, поэтому запросы можно направлять
+на любую из них. Трафик по HTTP перенаправляется на HTTPS, сертификат — Let's Encrypt.
+
+Описание инфраструктуры и идентификаторы ресурсов — в [docs/infrastructure.md](docs/infrastructure.md).
+
 ## Стек
 
-- Ansible — управление конфигурацией серверов
+- Ansible — управление конфигурацией серверов и деплой
 - Docker — запуск приложения в контейнерах
-- Yandex Cloud — две виртуальные машины, L7-балансировщик, кластер PostgreSQL
-
-Описание инфраструктуры — в [docs/infrastructure.md](docs/infrastructure.md).
+- Yandex Cloud — две виртуальные машины, L7-балансировщик, кластер PostgreSQL, Cloud DNS, Certificate Manager
 
 ## Требования
 
@@ -47,6 +55,37 @@ ssh-keygen -t ed25519 -f ~/.ssh/hexlet_devops_76 -C 'hexlet-devops-76'
 При создании машин это делается через `cloud-init`, позже — через
 `ssh-copy-id -i ~/.ssh/hexlet_devops_76.pub ubuntu@<адрес>`.
 
+### Секреты
+
+Пароль базы данных и ключ подписи сессий Redmine хранятся в зашифрованном файле
+`group_vars/all/vault.yml`. В репозиторий он не попадает — рядом лежит образец
+`group_vars/all/vault.yml.example`.
+
+Файл с паролем от vault создаётся один раз:
+
+```bash
+mkdir -p ~/.config/hexlet-devops-76
+openssl rand -base64 32 > ~/.config/hexlet-devops-76/vault_pass
+chmod 600 ~/.config/hexlet-devops-76/vault_pass
+```
+
+Путь к нему уже прописан в `ansible.cfg`. Дальше создаётся сам vault:
+
+```bash
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+ansible-vault encrypt group_vars/all/vault.yml
+ansible-vault edit group_vars/all/vault.yml
+```
+
+Заполнить нужно две переменные:
+
+- `vault_redmine_db_password` — пароль пользователя `app` в кластере PostgreSQL
+- `vault_redmine_secret_key_base` — ключ подписи сессий, `openssl rand -hex 64`
+
+Ключ подписи обязан совпадать на обеих машинах: иначе сессия, выданная одним
+сервером, не принимается вторым, и пользователя выбрасывает при переключении
+бэкенда балансировщиком.
+
 ### Инвентарь
 
 `inventory.ini` содержит группу `webservers` с двумя серверами:
@@ -75,19 +114,60 @@ make ping
 make prepare
 ```
 
-Команда идемпотентна: повторный запуск на настроенных серверах ничего не меняет
-и завершается с `changed=0`.
+Развернуть приложение:
+
+```bash
+make deploy
+```
+
+`make deploy` запускает только приложение и не трогает настройки серверов:
+подготовка и деплой разделены тегами Ansible (`setup` и `deploy`).
+
+Обе команды идемпотентны — повторный запуск на настроенном окружении завершается
+с `changed=0`.
+
+## Настройки приложения
+
+Переменные лежат в `group_vars/all/main.yml`:
+
+| Переменная | Значение | Назначение |
+|---|---|---|
+| `redmine_port` | `8080` | внешний порт контейнера |
+| `redmine_image` | `redmine:6` | образ приложения |
+| `redmine_dir` | `/opt/redmine` | каталог с `.env` на сервере |
+
+Порт `8080` совпадает с портом в группе бэкендов балансировщика и с правилом в
+группе безопасности `sg-app`. При его изменении нужно поправить и то, и другое.
+
+Переменные окружения контейнера рендерятся из `templates/redmine.env.j2` в
+`/opt/redmine/.env` и передаются в контейнер опцией `env_file`.
+
+## Известные ограничения
+
+**Вложения не общие.** Redmine хранит загруженные файлы на диске контейнера.
+Сетевого тома между машинами нет, поэтому файл, загруженный через `app-01`, не
+откроется, если следующий запрос уйдёт на `app-02`. Лечится общим хранилищем —
+за рамками проекта.
+
+**Docker Hub недоступен из Yandex Cloud.** `auth.docker.io` и `registry-1.docker.io`
+не отвечают. В `daemon.json` прописано зеркало `https://mirror.gcr.io` —
+pull-through кеш Google для Docker Hub. Настройка применяется ролью на шаге
+`make prepare`, имена образов остаются обычными.
 
 ## Структура
 
 ```
 .
-├── ansible.cfg          конфигурация Ansible: инвентарь, пути к ролям
+├── ansible.cfg          конфигурация Ansible: инвентарь, пути к ролям, vault
 ├── inventory.ini        серверы, сгруппированные в webservers
 ├── requirements.yml     роли и коллекции Ansible Galaxy
-├── playbook.yml         основной плейбук
+├── playbook.yml         подготовка серверов (тег setup) и деплой (тег deploy)
 ├── group_vars/
-│   └── all.yml          переменные ролей
+│   └── all/
+│       ├── main.yml            переменные ролей и приложения
+│       └── vault.yml.example   образец файла с секретами
+├── templates/
+│   └── redmine.env.j2   шаблон переменных окружения контейнера
 ├── Makefile             команды проекта
 └── docs/
     └── infrastructure.md  описание инфраструктуры в облаке

@@ -2,6 +2,7 @@
 - name: Prepare application servers
   hosts: all
   become: true
+  tags: setup
 
   pre_tasks:
     # На машинах нет маршрута IPv6. Если DNS отдаёт AAAA первыми, python-модули
@@ -46,3 +47,57 @@
   roles:
     - geerlingguy.pip
     - geerlingguy.docker
+
+# Деплой вынесен в отдельный play с тегом deploy: `make deploy` запускает только
+# его и не трогает настройки серверов.
+#
+# serial: 1 — контейнер Redmine при старте прогоняет миграции базы. База общая
+# для обеих машин, и одновременный старт двух контейнеров приводит к гонке за
+# миграции. Разворачиваем последовательно.
+- name: Deploy Redmine
+  hosts: all
+  become: true
+  serial: 1
+  tags: deploy
+
+  tasks:
+    - name: Ensure application directory exists
+      ansible.builtin.file:
+        path: "{{ redmine_dir }}"
+        state: directory
+        mode: "0750"
+
+    - name: Render environment file
+      ansible.builtin.template:
+        src: redmine.env.j2
+        dest: "{{ redmine_dir }}/.env"
+        mode: "0600"
+      register: redmine_env
+
+    - name: Pull application image
+      community.docker.docker_image:
+        name: "{{ redmine_image }}"
+        source: pull
+        force_source: false
+
+    - name: Run application container
+      community.docker.docker_container:
+        name: "{{ redmine_container_name }}"
+        image: "{{ redmine_image }}"
+        env_file: "{{ redmine_dir }}/.env"
+        published_ports:
+          - "{{ redmine_port }}:3000"
+        restart_policy: unless-stopped
+        state: started
+        # Пересоздаём контейнер, если изменился .env: docker_container сам этого
+        # не замечает, переменные окружения читаются только при создании.
+        recreate: "{{ redmine_env is changed }}"
+
+    - name: Wait for application to answer
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ redmine_port }}/"
+        status_code: 200
+      register: redmine_health
+      until: redmine_health is succeeded
+      retries: 30
+      delay: 10

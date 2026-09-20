@@ -1,0 +1,45 @@
+---
+# --- Подготовка серверов ---------------------------------------------------
+
+# Роль geerlingguy.pip: python-пакеты, которые нужны модулям Ansible на серверах.
+# SDK docker требуется коллекции community.docker для управления контейнерами.
+pip_install_packages:
+  - name: docker
+
+# Роль geerlingguy.docker: кого добавить в группу docker, чтобы сокет был доступен
+# без sudo. Без этого модули community.docker упираются в права на /var/run/docker.sock.
+docker_users:
+  - "{{ ansible_user }}"
+
+# По умолчанию роль подставляет сюда URL и скачивает ключ сама на каждом прогоне.
+# Путь к локальному файлу делает прогон идемпотентным и не зависящим от сети:
+# ключ кладётся один раз в pre_tasks.
+docker_apt_gpg_key: /etc/apt/keyrings/docker.asc
+
+# Docker Hub из Yandex Cloud недоступен: auth.docker.io и registry-1.docker.io
+# не отвечают. mirror.gcr.io — официальный pull-through кеш Google для Docker Hub,
+# он доступен. Зеркало в daemon.json позволяет тянуть образы по обычным именам.
+docker_daemon_options:
+  registry-mirrors:
+    - "https://mirror.gcr.io"
+
+# --- Приложение ------------------------------------------------------------
+
+# Внешний порт контейнера. Совпадает с портом в группе бэкендов балансировщика
+# и с правилом в группе безопасности sg-app.
+redmine_port: 8080
+
+redmine_image: redmine:6
+redmine_container_name: redmine
+redmine_dir: /opt/redmine
+
+# Кластер Managed PostgreSQL из шага 1. Общая база для обеих машин: иначе
+# балансировщик показывал бы два независимых Redmine с разными данными.
+redmine_db_host: rc1a-lnmjhlilvivvi07f.mdb.yandexcloud.net
+redmine_db_port: 6432
+redmine_db_name: app
+redmine_db_user: app
+
+# Секреты приходят из group_vars/all/vault.yml (ansible-vault, вне репозитория).
+redmine_db_password: "{{ vault_redmine_db_password }}"
+redmine_secret_key_base: "{{ vault_redmine_secret_key_base }}"
