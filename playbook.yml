@@ -91,8 +91,12 @@
     # Задание требует ставить агента только группе webservers. Условие на роли,
     # а не hosts: webservers — потому что автоматическая проверка проекта ждёт
     # hosts: all у плеев. Результат тот же.
+    #
+    # group_names, а не groups['webservers']: это всегда список групп текущего
+    # хоста. Обращение к groups по имени разваливается там, где такой группы в
+    # инвентаре нет.
     - role: datadog.datadog
-      when: inventory_hostname in groups['webservers']
+      when: "'webservers' in group_names"
 
 # Деплой вынесен в отдельный play с тегом deploy: `make deploy` запускает только
 # его и не трогает настройки серверов.
