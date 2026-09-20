@@ -17,14 +17,6 @@
         create: true
         mode: "0644"
 
-    # Образ приезжает с устаревшим индексом apt: он ссылается на версии пакетов,
-    # которых на зеркале уже нет, и установка падает с 404.
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 3600
-      changed_when: false
-
     # apt не смотрит в /etc/gai.conf и упорно ходит по IPv6, которого на машинах
     # нет: каждый репозиторий сначала отдаёт серию "Network is unreachable".
     - name: Force apt to use IPv4
@@ -32,6 +24,17 @@
         content: 'Acquire::ForceIPv4 "true";'
         dest: /etc/apt/apt.conf.d/99-force-ipv4
         mode: "0644"
+
+    # Образ приезжает с устаревшим индексом apt: он ссылается на версии пакетов,
+    # которых на зеркале уже нет, и установка падает с 404.
+    #
+    # cache_valid_time здесь не ставим намеренно: в свежем контейнере индекс
+    # бывает новым по времени, но неполным по содержимому, и тогда Ansible
+    # пропустит обновление, а следующая задача не найдёт пакет.
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      changed_when: false
 
     - name: Ensure apt keyring directory exists
       ansible.builtin.file:
