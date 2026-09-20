@@ -1,0 +1,20 @@
+# Ansible
+*.retry
+.vault_pass
+vault.yml
+
+# Секреты и локальные окружения
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# IDE
+.idea/
+.vscode/
+
+# Прочее
+.DS_Store
