@@ -1,56 +1,10 @@
 ---
-# Приложение. Секреты приходят из vault.yml того же каталога — он зашифрован
-# ansible-vault и в репозиторий не попадает.
-
-# Внешний порт контейнера. Совпадает с портом в группе бэкендов балансировщика
-# и с правилом в группе безопасности sg-app.
-redmine_port: 8080
-
-redmine_image: redmine:6
-redmine_container_name: redmine
-redmine_dir: /opt/redmine
-
-# Кластер Managed PostgreSQL. Общая база для обеих машин: иначе балансировщик
-# показывал бы два независимых Redmine с разными данными.
-redmine_db_host: rc1a-lnmjhlilvivvi07f.mdb.yandexcloud.net
-redmine_db_port: 6432
-redmine_db_name: app
-redmine_db_user: app
+# Переходники на секреты. Сами значения лежат в vault.yml этого же каталога,
+# зашифрованном ansible-vault; в репозиторий он не попадает.
+#
+# Всё несекретное — в group_vars/all/main.yml.
 
 redmine_db_password: "{{ vault_redmine_db_password }}"
 redmine_secret_key_base: "{{ vault_redmine_secret_key_base }}"
 
-# --- Мониторинг ------------------------------------------------------------
-
 datadog_api_key: "{{ vault_datadog_api_key }}"
-datadog_site: "{{ vault_datadog_site }}"
-
-# http_check отправляет в DataDog состояние приложения.
-# Локальная проверка показывает здоровье конкретной машины — это то, что просит
-# задание. Публичная проверяет всю цепочку целиком: балансировщик, сертификат,
-# маршрутизацию. Без неё мониторинг не заметит, что балансировщик выкинул обе
-# машины из ротации, пока сами машины живы.
-datadog_checks:
-  http_check:
-    init_config:
-    instances:
-      - name: redmine-local
-        url: "http://localhost:{{ redmine_port }}"
-        timeout: 5
-      - name: redmine-public
-        url: "https://shawn4easy.ru"
-        timeout: 10
-
-# Ключи, которыми подписан APT-репозиторий DataDog. Скачиваются в pre_tasks с
-# повторами и собираются в связку до запуска роли — см. комментарий в playbook.yml.
-# Путь связки повторяет внутренний дефолт роли datadog.datadog: в pre_tasks
-# дефолты роли ещё не загружены, поэтому задаём его своей переменной.
-datadog_keyring_path: /usr/share/keyrings/datadog-archive-keyring.gpg
-datadog_keys_dir: /etc/apt/keyrings/datadog
-
-datadog_apt_key_files:
-  - DATADOG_APT_KEY_CURRENT
-  - DATADOG_APT_KEY_382E94DE
-  - DATADOG_APT_KEY_F14F620E
-  - DATADOG_APT_KEY_C0962C7D
-  - DATADOG_APT_KEY_06462314

@@ -1,7 +1,9 @@
 ---
-# Образец. Рабочий файл создаётся командой:
+# Образец. Рабочий файл создаётся так:
 #
-#   ansible-vault create group_vars/webservers/vault.yml
+#   cp group_vars/webservers/vault.yml.example group_vars/webservers/vault.yml
+#   make vault-encrypt
+#   make vault-edit
 #
 # Пароль от vault лежит в ~/.config/hexlet-devops-76/vault_pass,
 # путь к нему прописан в ansible.cfg.
@@ -13,3 +15,6 @@ vault_redmine_db_password: ""
 # иначе сессия, выданная одним сервером, не принимается вторым.
 # Сгенерировать: openssl rand -hex 64
 vault_redmine_secret_key_base: ""
+
+# Ключ API из DataDog: Organization Settings → API Keys.
+vault_datadog_api_key: ""

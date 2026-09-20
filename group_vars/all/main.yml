@@ -1,6 +1,8 @@
 ---
-# Подготовка серверов. Относится к любому хосту, который готовим, поэтому живёт
-# в group_vars/all, а не в группе webservers.
+# Переменные общего характера. Секретов здесь нет — они лежат в
+# group_vars/webservers/vault.yml под ansible-vault.
+
+# --- Подготовка серверов ---------------------------------------------------
 
 # Роль geerlingguy.pip: python-пакеты, которые нужны модулям Ansible на серверах.
 # SDK docker требуется коллекции community.docker для управления контейнерами.
@@ -23,3 +25,55 @@ docker_apt_gpg_key: /etc/apt/keyrings/docker.asc
 docker_daemon_options:
   registry-mirrors:
     - "https://mirror.gcr.io"
+
+# --- Приложение ------------------------------------------------------------
+
+# Внешний порт контейнера. Совпадает с портом в группе бэкендов балансировщика
+# и с правилом в группе безопасности sg-app.
+redmine_port: 8080
+
+redmine_image: redmine:6
+redmine_container_name: redmine
+redmine_dir: /opt/redmine
+
+# Кластер Managed PostgreSQL. Общая база для обеих машин: иначе балансировщик
+# показывал бы два независимых Redmine с разными данными.
+redmine_db_host: rc1a-lnmjhlilvivvi07f.mdb.yandexcloud.net
+redmine_db_port: 6432
+redmine_db_name: app
+redmine_db_user: app
+
+# --- Мониторинг ------------------------------------------------------------
+
+# Регион, в котором заведена организация DataDog. Не секрет.
+datadog_site: datadoghq.eu
+
+# http_check отправляет в DataDog состояние приложения.
+# Локальная проверка показывает здоровье конкретной машины — это то, что просит
+# задание. Публичная проверяет всю цепочку целиком: балансировщик, сертификат,
+# маршрутизацию. Без неё мониторинг не заметит, что балансировщик выкинул обе
+# машины из ротации, пока сами машины живы.
+datadog_checks:
+  http_check:
+    init_config:
+    instances:
+      - name: redmine-local
+        url: "http://localhost:{{ redmine_port }}"
+        timeout: 5
+      - name: redmine-public
+        url: "https://shawn4easy.ru"
+        timeout: 10
+
+# Ключи, которыми подписан APT-репозиторий DataDog. Скачиваются в pre_tasks с
+# повторами и собираются в связку до запуска роли — см. комментарий в playbook.yml.
+# Путь связки повторяет внутренний дефолт роли datadog.datadog: в pre_tasks
+# дефолты роли ещё не загружены, поэтому задаём его своей переменной.
+datadog_keyring_path: /usr/share/keyrings/datadog-archive-keyring.gpg
+datadog_keys_dir: /etc/apt/keyrings/datadog
+
+datadog_apt_key_files:
+  - DATADOG_APT_KEY_CURRENT
+  - DATADOG_APT_KEY_382E94DE
+  - DATADOG_APT_KEY_F14F620E
+  - DATADOG_APT_KEY_C0962C7D
+  - DATADOG_APT_KEY_06462314

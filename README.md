@@ -80,12 +80,14 @@ make vault-edit
 
 Посмотреть содержимое, не расшифровывая файл на диске: `make vault-view`.
 
-Заполнить нужно четыре переменные:
+Заполнить нужно три переменные:
 
 - `vault_redmine_db_password` — пароль пользователя `app` в кластере PostgreSQL
 - `vault_redmine_secret_key_base` — ключ подписи сессий, `openssl rand -hex 64`
 - `vault_datadog_api_key` — ключ API из Organization Settings → API Keys
-- `vault_datadog_site` — регион организации DataDog: `datadoghq.eu`, `datadoghq.com` и так далее
+
+Регион организации DataDog задаётся переменной `datadog_site` в
+`group_vars/all/main.yml` — это не секрет.
 
 Ключ подписи обязан совпадать на обеих машинах: иначе сессия, выданная одним
 сервером, не принимается вторым, и пользователя выбрасывает при переключении
@@ -133,8 +135,14 @@ make deploy
 
 ## Настройки приложения
 
-Переменные приложения лежат в `group_vars/webservers/vars.yml`, настройки
-подготовки серверов — в `group_vars/all/main.yml`:
+Переменные разложены по признаку секретности:
+
+- `group_vars/all/main.yml` — всё несекретное: настройки ролей, порт и образ
+  приложения, адрес базы, конфигурация проверок DataDog
+- `group_vars/webservers/vars.yml` — переходники вида `some_var: "{{ vault_some_var }}"`
+- `group_vars/webservers/vault.yml` — сами секреты, под `ansible-vault`
+
+Основное:
 
 | Переменная | Значение | Назначение |
 |---|---|---|
@@ -191,9 +199,9 @@ pull-through кеш Google для Docker Hub. Настройка применя�
 ├── playbook.yml         подготовка серверов (тег setup) и деплой (тег deploy)
 ├── group_vars/
 │   ├── all/
-│   │   └── main.yml            переменные подготовки серверов
+│   │   └── main.yml            несекретные переменные
 │   └── webservers/
-│       ├── vars.yml            переменные приложения
+│       ├── vars.yml            переходники на секреты
 │       └── vault.yml.example   образец файла с секретами
 ├── templates/
 │   └── redmine.env.j2   шаблон переменных окружения контейнера

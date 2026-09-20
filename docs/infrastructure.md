@@ -194,7 +194,8 @@ SSH открыт всем — так написано в задании. На б
 ## Мониторинг
 
 Агент DataDog версии 7 на обеих машинах, ставится ролью `datadog.datadog` в play подготовки
-серверов. Регион организации и ключ API лежат в `group_vars/webservers/vault.yml`.
+серверов. Ключ API лежит в `group_vars/webservers/vault.yml`, регион организации — в
+`group_vars/all/main.yml`: он не секрет.
 
 Проверка `http_check` в двух экземплярах:
 
