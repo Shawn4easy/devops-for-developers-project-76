@@ -25,6 +25,14 @@
         cache_valid_time: 3600
       changed_when: false
 
+    # apt не смотрит в /etc/gai.conf и упорно ходит по IPv6, которого на машинах
+    # нет: каждый репозиторий сначала отдаёт серию "Network is unreachable".
+    - name: Force apt to use IPv4
+      ansible.builtin.copy:
+        content: 'Acquire::ForceIPv4 "true";'
+        dest: /etc/apt/apt.conf.d/99-force-ipv4
+        mode: "0644"
+
     - name: Ensure apt keyring directory exists
       ansible.builtin.file:
         path: /etc/apt/keyrings
@@ -44,9 +52,44 @@
       retries: 5
       delay: 10
 
+    # Роль datadog.datadog качает свои APT-ключи через get_url без повторов, а
+    # связность с s3.amazonaws.com из ru-central1-a рвётся (keys.datadoghq.com
+    # недоступен вовсе). Собираем связку сами: роль находит готовые ключи в
+    # keyring и ничего не скачивает.
+    - name: Ensure Datadog key directory exists
+      ansible.builtin.file:
+        path: "{{ datadog_keys_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download Datadog apt signing keys
+      ansible.builtin.get_url:
+        url: "https://s3.amazonaws.com/public-signing-keys/{{ item }}.public"
+        dest: "{{ datadog_keys_dir }}/{{ item }}.asc"
+        mode: "0644"
+      loop: "{{ datadog_apt_key_files }}"
+      register: datadog_keys
+      until: datadog_keys is succeeded
+      retries: 10
+      delay: 15
+
+    - name: Build Datadog apt keyring
+      ansible.builtin.shell:
+        cmd: cat {{ datadog_keys_dir }}/*.asc | gpg --dearmor --yes --output {{ datadog_keyring_path }}
+        creates: "{{ datadog_keyring_path }}"
+
   roles:
     - geerlingguy.pip
     - geerlingguy.docker
+
+    # Агент мониторинга — настройка сервера, поэтому он в play подготовки, а не
+    # деплоя: команда деплоя не должна менять конфигурацию серверов.
+    #
+    # Задание требует ставить агента только группе webservers. Условие на роли,
+    # а не hosts: webservers — потому что автоматическая проверка проекта ждёт
+    # hosts: all у плеев. Результат тот же.
+    - role: datadog.datadog
+      when: inventory_hostname in groups['webservers']
 
 # Деплой вынесен в отдельный play с тегом deploy: `make deploy` запускает только
 # его и не трогает настройки серверов.

@@ -22,6 +22,7 @@ Redmine в Docker на двух виртуальных машинах за L7-б
 - Ansible — управление конфигурацией серверов и деплой
 - Docker — запуск приложения в контейнерах
 - Yandex Cloud — две виртуальные машины, L7-балансировщик, кластер PostgreSQL, Cloud DNS, Certificate Manager
+- DataDog — мониторинг серверов и доступности приложения
 
 ## Требования
 
@@ -79,10 +80,12 @@ make vault-edit
 
 Посмотреть содержимое, не расшифровывая файл на диске: `make vault-view`.
 
-Заполнить нужно две переменные:
+Заполнить нужно четыре переменные:
 
 - `vault_redmine_db_password` — пароль пользователя `app` в кластере PostgreSQL
 - `vault_redmine_secret_key_base` — ключ подписи сессий, `openssl rand -hex 64`
+- `vault_datadog_api_key` — ключ API из Organization Settings → API Keys
+- `vault_datadog_site` — регион организации DataDog: `datadoghq.eu`, `datadoghq.com` и так далее
 
 Ключ подписи обязан совпадать на обеих машинах: иначе сессия, выданная одним
 сервером, не принимается вторым, и пользователя выбрасывает при переключении
@@ -94,7 +97,7 @@ make vault-edit
 
 ```ini
 [webservers]
-app-01 ansible_host=51.250.69.112
+app-01 ansible_host=93.77.183.18
 app-02 ansible_host=84.201.152.93
 ```
 
@@ -110,7 +113,7 @@ app-02 ansible_host=84.201.152.93
 make ping
 ```
 
-Подготовить серверы — установить pip, python-модуль `docker` и сам Docker:
+Подготовить серверы — установить pip, python-модуль `docker`, сам Docker и агент DataDog:
 
 ```bash
 make prepare
@@ -145,12 +148,33 @@ make deploy
 Переменные окружения контейнера рендерятся из `templates/redmine.env.j2` в
 `/opt/redmine/.env` и передаются в контейнер опцией `env_file`.
 
+## Мониторинг
+
+Агент DataDog ставится на серверы командой `make prepare` вместе с остальной подготовкой:
+это конфигурация сервера, а не приложение, поэтому в `make deploy` его нет.
+
+Проверка `http_check` настроена в двух экземплярах — локально на `http://localhost:8080`
+и публично на `https://shawn4easy.ru`. Первая показывает здоровье конкретной машины,
+вторая — всей цепочки с балансировщиком и сертификатом.
+
+Посмотреть состояние агента на серверах:
+
+```bash
+ansible webservers -m shell -a 'datadog-agent status' --become
+```
+
 ## Известные ограничения
 
 **Вложения не общие.** Redmine хранит загруженные файлы на диске контейнера.
 Сетевого тома между машинами нет, поэтому файл, загруженный через `app-01`, не
 откроется, если следующий запрос уйдёт на `app-02`. Лечится общим хранилищем —
 за рамками проекта.
+
+**Публичный адрес машины может попасть под фильтрацию.** У `app-01` первый выданный адрес
+не пускал трафик на `apt.datadoghq.com`, `download.docker.com` и `github.com`. Лечится
+перезапуском машины: `yc compute instance stop app-01 && yc compute instance start app-01`,
+после чего в `inventory.ini` правится новый адрес. Подробности — в
+[docs/infrastructure.md](docs/infrastructure.md).
 
 **Docker Hub недоступен из Yandex Cloud.** `auth.docker.io` и `registry-1.docker.io`
 не отвечают. В `daemon.json` прописано зеркало `https://mirror.gcr.io` —
