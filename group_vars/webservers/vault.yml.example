@@ -1,7 +1,7 @@
 ---
 # Образец. Рабочий файл создаётся командой:
 #
-#   ansible-vault create group_vars/all/vault.yml
+#   ansible-vault create group_vars/webservers/vault.yml
 #
 # Пароль от vault лежит в ~/.config/hexlet-devops-76/vault_pass,
 # путь к нему прописан в ansible.cfg.

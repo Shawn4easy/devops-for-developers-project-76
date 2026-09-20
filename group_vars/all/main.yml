@@ -1,5 +1,6 @@
 ---
-# --- Подготовка серверов ---------------------------------------------------
+# Подготовка серверов. Относится к любому хосту, который готовим, поэтому живёт
+# в group_vars/all, а не в группе webservers.
 
 # Роль geerlingguy.pip: python-пакеты, которые нужны модулям Ansible на серверах.
 # SDK docker требуется коллекции community.docker для управления контейнерами.
@@ -22,24 +23,3 @@ docker_apt_gpg_key: /etc/apt/keyrings/docker.asc
 docker_daemon_options:
   registry-mirrors:
     - "https://mirror.gcr.io"
-
-# --- Приложение ------------------------------------------------------------
-
-# Внешний порт контейнера. Совпадает с портом в группе бэкендов балансировщика
-# и с правилом в группе безопасности sg-app.
-redmine_port: 8080
-
-redmine_image: redmine:6
-redmine_container_name: redmine
-redmine_dir: /opt/redmine
-
-# Кластер Managed PostgreSQL из шага 1. Общая база для обеих машин: иначе
-# балансировщик показывал бы два независимых Redmine с разными данными.
-redmine_db_host: rc1a-lnmjhlilvivvi07f.mdb.yandexcloud.net
-redmine_db_port: 6432
-redmine_db_name: app
-redmine_db_user: app
-
-# Секреты приходят из group_vars/all/vault.yml (ansible-vault, вне репозитория).
-redmine_db_password: "{{ vault_redmine_db_password }}"
-redmine_secret_key_base: "{{ vault_redmine_secret_key_base }}"

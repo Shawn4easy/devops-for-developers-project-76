@@ -1,0 +1,21 @@
+---
+# Приложение. Секреты приходят из vault.yml того же каталога — он зашифрован
+# ansible-vault и в репозиторий не попадает.
+
+# Внешний порт контейнера. Совпадает с портом в группе бэкендов балансировщика
+# и с правилом в группе безопасности sg-app.
+redmine_port: 8080
+
+redmine_image: redmine:6
+redmine_container_name: redmine
+redmine_dir: /opt/redmine
+
+# Кластер Managed PostgreSQL. Общая база для обеих машин: иначе балансировщик
+# показывал бы два независимых Redmine с разными данными.
+redmine_db_host: rc1a-lnmjhlilvivvi07f.mdb.yandexcloud.net
+redmine_db_port: 6432
+redmine_db_name: app
+redmine_db_user: app
+
+redmine_db_password: "{{ vault_redmine_db_password }}"
+redmine_secret_key_base: "{{ vault_redmine_secret_key_base }}"

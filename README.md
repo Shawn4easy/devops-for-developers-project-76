@@ -58,8 +58,8 @@ ssh-keygen -t ed25519 -f ~/.ssh/hexlet_devops_76 -C 'hexlet-devops-76'
 ### Секреты
 
 Пароль базы данных и ключ подписи сессий Redmine хранятся в зашифрованном файле
-`group_vars/all/vault.yml`. В репозиторий он не попадает — рядом лежит образец
-`group_vars/all/vault.yml.example`.
+`group_vars/webservers/vault.yml`. В репозиторий он не попадает — рядом лежит
+образец `group_vars/webservers/vault.yml.example`.
 
 Файл с паролем от vault создаётся один раз:
 
@@ -72,10 +72,12 @@ chmod 600 ~/.config/hexlet-devops-76/vault_pass
 Путь к нему уже прописан в `ansible.cfg`. Дальше создаётся сам vault:
 
 ```bash
-cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-ansible-vault encrypt group_vars/all/vault.yml
-ansible-vault edit group_vars/all/vault.yml
+cp group_vars/webservers/vault.yml.example group_vars/webservers/vault.yml
+make vault-encrypt
+make vault-edit
 ```
+
+Посмотреть содержимое, не расшифровывая файл на диске: `make vault-view`.
 
 Заполнить нужно две переменные:
 
@@ -128,7 +130,8 @@ make deploy
 
 ## Настройки приложения
 
-Переменные лежат в `group_vars/all/main.yml`:
+Переменные приложения лежат в `group_vars/webservers/vars.yml`, настройки
+подготовки серверов — в `group_vars/all/main.yml`:
 
 | Переменная | Значение | Назначение |
 |---|---|---|
@@ -163,8 +166,10 @@ pull-through кеш Google для Docker Hub. Настройка применя�
 ├── requirements.yml     роли и коллекции Ansible Galaxy
 ├── playbook.yml         подготовка серверов (тег setup) и деплой (тег deploy)
 ├── group_vars/
-│   └── all/
-│       ├── main.yml            переменные ролей и приложения
+│   ├── all/
+│   │   └── main.yml            переменные подготовки серверов
+│   └── webservers/
+│       ├── vars.yml            переменные приложения
 │       └── vault.yml.example   образец файла с секретами
 ├── templates/
 │   └── redmine.env.j2   шаблон переменных окружения контейнера
