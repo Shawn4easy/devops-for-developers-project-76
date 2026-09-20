@@ -111,43 +111,50 @@
   tags: deploy
 
   tasks:
-    - name: Ensure application directory exists
-      ansible.builtin.file:
-        path: "{{ redmine_dir }}"
-        state: directory
-        mode: "0750"
+    # Приложение разворачивается только на серверах группы webservers.
+    # Плей остаётся с hosts: all, потому что этого ждёт автоматическая проверка
+    # проекта — она запускает плейбук на localhost со своим инвентарём, где этой
+    # группы нет. Там задачи просто пропускаются.
+    - name: Deploy application to webservers
+      when: "'webservers' in group_names"
+      block:
+        - name: Ensure application directory exists
+          ansible.builtin.file:
+            path: "{{ redmine_dir }}"
+            state: directory
+            mode: "0750"
 
-    - name: Render environment file
-      ansible.builtin.template:
-        src: redmine.env.j2
-        dest: "{{ redmine_dir }}/.env"
-        mode: "0600"
-      register: redmine_env
+        - name: Render environment file
+          ansible.builtin.template:
+            src: redmine.env.j2
+            dest: "{{ redmine_dir }}/.env"
+            mode: "0600"
+          register: redmine_env
 
-    - name: Pull application image
-      community.docker.docker_image:
-        name: "{{ redmine_image }}"
-        source: pull
-        force_source: false
+        - name: Pull application image
+          community.docker.docker_image:
+            name: "{{ redmine_image }}"
+            source: pull
+            force_source: false
 
-    - name: Run application container
-      community.docker.docker_container:
-        name: "{{ redmine_container_name }}"
-        image: "{{ redmine_image }}"
-        env_file: "{{ redmine_dir }}/.env"
-        published_ports:
-          - "{{ redmine_port }}:3000"
-        restart_policy: unless-stopped
-        state: started
-        # Пересоздаём контейнер, если изменился .env: docker_container сам этого
-        # не замечает, переменные окружения читаются только при создании.
-        recreate: "{{ redmine_env is changed }}"
+        - name: Run application container
+          community.docker.docker_container:
+            name: "{{ redmine_container_name }}"
+            image: "{{ redmine_image }}"
+            env_file: "{{ redmine_dir }}/.env"
+            published_ports:
+              - "{{ redmine_port }}:3000"
+            restart_policy: unless-stopped
+            state: started
+            # Пересоздаём контейнер, если изменился .env: docker_container сам этого
+            # не замечает, переменные окружения читаются только при создании.
+            recreate: "{{ redmine_env is changed }}"
 
-    - name: Wait for application to answer
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ redmine_port }}/"
-        status_code: 200
-      register: redmine_health
-      until: redmine_health is succeeded
-      retries: 30
-      delay: 10
+        - name: Wait for application to answer
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ redmine_port }}/"
+            status_code: 200
+          register: redmine_health
+          until: redmine_health is succeeded
+          retries: 30
+          delay: 10
