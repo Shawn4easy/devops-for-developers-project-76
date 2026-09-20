@@ -18,3 +18,6 @@ id_ed25519*
 
 # Прочее
 .DS_Store
+
+# Ansible Galaxy (ставится через make install)
+.ansible/

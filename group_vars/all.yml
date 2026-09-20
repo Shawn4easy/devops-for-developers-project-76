@@ -1,0 +1,15 @@
+---
+# Роль geerlingguy.pip: python-пакеты, которые нужны модулям Ansible на серверах.
+# SDK docker требуется коллекции community.docker для управления контейнерами.
+pip_install_packages:
+  - name: docker
+
+# Роль geerlingguy.docker: кого добавить в группу docker, чтобы сокет был доступен
+# без sudo. Без этого модули community.docker упираются в права на /var/run/docker.sock.
+docker_users:
+  - "{{ ansible_user }}"
+
+# По умолчанию роль подставляет сюда URL и скачивает ключ сама на каждом прогоне.
+# Путь к локальному файлу делает прогон идемпотентным и не зависящим от сети:
+# ключ кладётся один раз в pre_tasks.
+docker_apt_gpg_key: /etc/apt/keyrings/docker.asc
